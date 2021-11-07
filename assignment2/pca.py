@@ -97,7 +97,7 @@ def run_PCA(k: int, iris_path: str):
     custom_pca = CustomPCA(df, k=k)
     projected_data = custom_pca.transform()
 
-    # calculating rmse after inverse projection
+    # calculating mse after inverse projection
     inverse = custom_pca.inverse_transform(projected_data)
     error = mean_squared_error(df, inverse)
     print(f"Error calculation for k: {k} is {error}")
