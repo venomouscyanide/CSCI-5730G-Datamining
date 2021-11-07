@@ -15,7 +15,6 @@ import plotly.express as px
 
 
 def plot_pca(projected_data: np.ndarray, labels: List[str]):
-    # append label info to last column
     labels = np.array(labels)
 
     if projected_data.shape[-1] == 2:
