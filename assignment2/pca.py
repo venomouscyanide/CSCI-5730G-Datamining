@@ -71,7 +71,7 @@ class CustomPCA:
         return inverse_t
 
 
-def run_PCA(k: int, iris_path: str):
+def run_PCA_on_iris(k: int, iris_path: str):
     # read the iris dataset and parse data into list of lines
     with open(iris_path) as iris_file:
         data = iris_file.read().splitlines()
@@ -118,4 +118,4 @@ if __name__ == '__main__':
                         default="IRIS data/iris.data")
     parser.add_argument('--k', help='k value', required=True, type=int)
     args = parser.parse_args()
-    run_PCA(args.k, args.iris_dataset_location)
+    run_PCA_on_iris(args.k, args.iris_dataset_location)
