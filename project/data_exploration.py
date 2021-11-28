@@ -89,7 +89,7 @@ def split_sequences(sequences, n_steps):
 
 
 class Cleaning:
-    def clean2(self, base_path):
+    def clean(self, base_path):
         oe_locale = OrdinalEncoder(dtype=np.int64)
         oe_city = OrdinalEncoder(dtype=np.int64)
         oe_state = OrdinalEncoder(dtype=np.int64)
@@ -153,63 +153,6 @@ class Cleaning:
         x, y = split_sequences(rows_to_train_on, 30)
         return x, y
 
-    def clean(self, base_path):
-        oe_locale = OrdinalEncoder(dtype=np.int64)
-
-        train_data = pd.read_csv(os.path.join(base_path, DataFiles.TRAIN))
-        store_metadata = pd.read_csv(
-            os.path.join(base_path, DataFiles.STORE_METADATA))  # not used in this implementation
-        transactions = pd.read_csv(os.path.join(base_path, DataFiles.TRANSACTIONS))
-        oil_prices = pd.read_csv(os.path.join(base_path, DataFiles.OIL_PRICES))
-        holidays = pd.read_csv(os.path.join(base_path, DataFiles.HOLIDAYS))
-
-        train_data_copy = train_data.copy()
-        train_data = train_data_copy.groupby(['date']).agg({'sales': 'mean', 'onpromotion': 'mean'})
-        # enhanced_train_data = train_data.merge(store_metadata, left_on='store_nbr', right_on='store_nbr', how='left')
-        num_oil_prices = len(oil_prices)
-        for index, item in enumerate(oil_prices.values):
-            if not np.isnan(item[1]):
-                continue
-            if index == 0:
-                value_to_replace_na = oil_prices.loc[index + 1]['dcoilwtico']
-            elif index == num_oil_prices - 1:
-                value_to_replace_na = oil_prices.loc[index - 1]['dcoilwtico']
-            else:
-                value_to_replace_na = (oil_prices.loc[index + 1]['dcoilwtico'] +
-                                       oil_prices.loc[index + - 1]['dcoilwtico']) / 2
-            oil_prices.at[index, 'dcoilwtico'] = value_to_replace_na
-
-        enhanced_train_data = train_data.merge(oil_prices, left_on='date', right_on='date', how='left')
-        enhanced_train_data['dcoilwtico'].fillna(method='ffill', inplace=True)
-        transactions = transactions.groupby(['date']).agg({'transactions': 'mean'})
-        enhanced_train_data = enhanced_train_data.merge(transactions, left_on=['date'], right_on=['date'], how='left')
-
-        holiday_types = ['Holiday', 'Additional', 'Bridge', 'Event', 'Transfer']
-        holidays = holidays.query("(type in @holiday_types) and (transferred == 0)")
-        holidays.drop(columns=['locale_name', 'description', 'transferred'], inplace=True)
-        holidays.drop_duplicates(inplace=True, keep="first", subset=['date'])
-        enhanced_train_data = enhanced_train_data.merge(holidays, left_on=['date'], right_on=['date'], how='left')
-
-        enhanced_train_data['locale'].fillna(value='WorkDay', inplace=True)
-        enhanced_train_data['type'].fillna(value=0, inplace=True)
-        enhanced_train_data['type'] = enhanced_train_data['type'].astype(bool).astype(int)
-        enhanced_train_data["locale"] = oe_locale.fit_transform(enhanced_train_data[["locale"]])
-
-        enhanced_train_data.set_index('date', inplace=True)
-
-        scaler = MinMaxScaler()
-        scaler.fit(enhanced_train_data)
-        enhanced_train_data = scaler.transform(enhanced_train_data)
-
-        train_data_copy.sort_values(by=['date', 'store_nbr', 'family'], inplace=True)
-        labels = train_data_copy.groupby('date')['sales'].apply(list)
-        labels = labels.to_frame()
-        labels = pd.DataFrame(
-            labels.sales.to_list(),
-            labels.index, [f"dim_{n}" for n in range(1782)]
-        )
-        return enhanced_train_data, labels
-
 
 class TrainRnn:
     def train(self, train_data, labels):
@@ -240,11 +183,9 @@ class TrainRnn:
 
 
 def run(base_path):
-    train_data, labels = Cleaning().clean2(base_path)
+    train_data, labels = Cleaning().clean(base_path)
     TrainIndividual().train(train_data, labels)
-    # train_data, labels = Cleaning().clean(base_path)
-    # TrainRnn().train(train_data, labels)
 
 
 if __name__ == '__main__':
-    run(base_path='project/store-sales-time-series-forecasting')
+    run(base_path='store-sales-time-series-forecasting')
