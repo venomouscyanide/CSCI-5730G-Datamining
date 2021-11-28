@@ -157,34 +157,6 @@ class Cleaning:
         return x, y
 
 
-class TrainRnn:
-    def train(self, train_data, labels):
-        # train_data: 1684 * 6 ; labels: 1684 * 1782
-        rnn_model = RNNPred(input_dim=6, hidden_size=128, no_of_hidden_layers=3, output_size=1782)
-        optimizer = torch.optim.Adam(rnn_model.parameters(), lr=0.001)
-        loss_fn = MSELoss(reduction="mean")
-
-        hidden = torch.zeros(3, 1, 128, dtype=torch.double)
-
-        for epoch in range(10):
-            optimizer.zero_grad()
-            loss_float = 0
-            for x, y in zip(train_data, labels.to_numpy()):
-                x = torch.tensor(x.reshape(6, 1).view(), dtype=torch.double)
-                y = torch.tensor(y.reshape(1, 1782).view(), dtype=torch.double)
-                output, hidden = rnn_model(x, hidden)
-
-                loss = loss_fn(y, output[-1])
-                loss.backward()
-
-                optimizer.step()
-                optimizer.zero_grad()
-            print("Done with one epoch")
-            # loss_float += loss_fn(y, output[-1]).item()
-
-            # epoch_loss = loss / len(train_data)
-
-
 def run(base_path):
     train_data, labels = Cleaning().clean(base_path)
     TrainIndividual().train(train_data, labels)
