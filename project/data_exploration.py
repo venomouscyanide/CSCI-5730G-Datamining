@@ -8,7 +8,7 @@ from sklearn.preprocessing import OrdinalEncoder, MinMaxScaler
 from torch.nn import CrossEntropyLoss, MSELoss, NLLLoss
 from torch.utils.data import TensorDataset, DataLoader
 
-from project.models import RNNPred
+from project.models import RNNPred, MV_LSTM
 
 import warnings
 
@@ -18,32 +18,43 @@ warnings.simplefilter(action="ignore")
 class TrainIndividual:
     def train(self, train_data, labels):
         batch_size = 16
-        rnn_model = RNNPred(input_dim=10, hidden_size=64, no_of_hidden_layers=3, output_size=1)
-        optimizer = torch.optim.Adam(rnn_model.parameters(), lr=0.001, weight_decay=1e-6)
+
+        n_features = 9
+        n_timesteps = 30
+
+        rnn_model = MV_LSTM(n_features, n_timesteps)
+        optimizer = torch.optim.Adam(rnn_model.parameters(), lr=0.0001, weight_decay=1e-6)
         loss_fn = MSELoss()
 
-        x = torch.from_numpy(train_data.values).double()
-        train_dataset = TensorDataset(x, torch.tensor(labels, dtype=torch.double))
-        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, drop_last=True)
+        # x = torch.from_numpy(train_data.values).double()
+        # train_dataset = TensorDataset(x, torch.tensor(labels, dtype=torch.double))
+        # train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, drop_last=True)
 
-        for epoch in range(10):
-            rnn_model.zero_grad()
-            epoch_loss = 0
-            for x, y in train_loader:
-                # x = x.reshape(10, 1)
-                # y = torch.tensor([y], dtype=torch.double)
-                x = x.view([16, -1, 10])
-                output = rnn_model(x)
-                # print(output[-1])
-                # loss += loss_fn(y, output[-1])
-                loss = loss_fn(y, output.reshape(16, 1, 1))
-                epoch_loss += loss.item()
+        rnn_model.train()
+
+        for epoch in range(50):
+            for b in range(0, len(train_data), batch_size):
+                inpt = train_data[b:b + batch_size, :, :]
+                target = labels[b:b + batch_size]
+
+                x_batch = torch.tensor(inpt, dtype=torch.float32)
+                y_batch = torch.tensor(target, dtype=torch.float32)
+
+                rnn_model.init_hidden(x_batch.size(0))
+                #    lstm_out, _ = mv_net.l_lstm(x_batch,nnet.hidden)
+                #    lstm_out.contiguous().view(x_batch.size(0),-1)
+                output = rnn_model(x_batch)
+                loss = loss_fn(output.view(-1), y_batch)
+
                 loss.backward()
+                print(loss.item())
+                torch.nn.utils.clip_grad_norm_(rnn_model.parameters(), 0.25)
                 optimizer.step()
                 optimizer.zero_grad()
-            # torch.nn.utils.clip_grad_norm_(rnn_model.parameters(), 5)
-            # optimizer.step()
-            print(f"Done with one epoch, loss is :{np.mean(epoch_loss)}")
+                # torch.nn.utils.clip_grad_norm_(rnn_model.parameters(), 5)
+                # optimizer.step()
+            break
+            print('step : ', epoch, 'loss : ', loss.item())
 
 
 class DataFiles:
@@ -57,6 +68,23 @@ class DataFiles:
     STORE_METADATA = 'stores.csv'
     HOLIDAYS = 'holidays_events.csv'
     TRANSACTIONS = 'transactions.csv'
+
+
+def split_sequences(sequences, n_steps):
+    # https://stackoverflow.com/questions/56858924/multivariate-input-lstm-in-pytorch
+    x, y = list(), list()
+    # sequences = sequences.to_numpy()
+    for i in range(len(sequences)):
+        # find the end of this pattern
+        end_ix = i + n_steps
+        # check if we are beyond the dataset
+        if end_ix > len(sequences):
+            break
+        # gather input and output parts of the pattern
+        seq_x, seq_y = sequences[i:end_ix, :-1], sequences[end_ix - 1, -1]
+        x.append(seq_x)
+        y.append(seq_y)
+    return np.array(x), np.array(y)
 
 
 class Cleaning:
@@ -114,8 +142,14 @@ class Cleaning:
         rows_to_train_on = grouped_data.get_group((1, "GROCERY I"))
         rows_to_train_on.drop(columns=['id', 'family', 'store_nbr'], inplace=True)
         y = rows_to_train_on.sales
-        rows_to_train_on.drop(columns=['sales'])
-        return rows_to_train_on, y
+        rows_to_train_on.drop(columns=['sales'], inplace=True)
+        rows_to_train_on.insert(loc=9, column='sales', value=y)
+
+        scaler = MinMaxScaler()
+        rows_to_train_on = scaler.fit_transform(rows_to_train_on)
+
+        x, y = split_sequences(rows_to_train_on, 30)
+        return x, y
 
     def clean(self, base_path):
         oe_locale = OrdinalEncoder(dtype=np.int64)
@@ -211,4 +245,4 @@ def run(base_path):
 
 
 if __name__ == '__main__':
-    run(base_path='store-sales-time-series-forecasting')
+    run(base_path='project/store-sales-time-series-forecasting')
