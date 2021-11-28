@@ -17,13 +17,13 @@ warnings.simplefilter(action="ignore")
 
 class TrainIndividual:
     def train(self, train_data, labels):
-        batch_size = 16
+        batch_size = 8
 
         n_features = 9
         n_timesteps = 30
 
         rnn_model = MV_LSTM(n_features, n_timesteps)
-        optimizer = torch.optim.Adam(rnn_model.parameters(), lr=0.0001, weight_decay=1e-6)
+        optimizer = torch.optim.Adam(rnn_model.parameters(), lr=0.001, weight_decay=1e-6)
         loss_fn = MSELoss()
 
         # x = torch.from_numpy(train_data.values).double()
@@ -33,6 +33,7 @@ class TrainIndividual:
         rnn_model.train()
 
         for epoch in range(50):
+            counter = 0
             for b in range(0, len(train_data), batch_size):
                 inpt = train_data[b:b + batch_size, :, :]
                 target = labels[b:b + batch_size]
@@ -47,13 +48,13 @@ class TrainIndividual:
                 loss = loss_fn(output.view(-1), y_batch)
 
                 loss.backward()
-                print(loss.item())
-                torch.nn.utils.clip_grad_norm_(rnn_model.parameters(), 0.25)
+                counter += 1
+                # print(loss.item(), counter)
+                # torch.nn.utils.clip_grad_norm_(rnn_model.parameters(), 5)
                 optimizer.step()
                 optimizer.zero_grad()
                 # torch.nn.utils.clip_grad_norm_(rnn_model.parameters(), 5)
                 # optimizer.step()
-            break
             print('step : ', epoch, 'loss : ', loss.item())
 
 
@@ -139,14 +140,15 @@ class Cleaning:
 
         grouped_data = enhanced_train_data.groupby(by=['store_nbr', 'family'])
 
-        rows_to_train_on = grouped_data.get_group((1, "GROCERY I"))
+        rows_to_train_on = grouped_data.get_group((1, "GROCERY II"))
         rows_to_train_on.drop(columns=['id', 'family', 'store_nbr'], inplace=True)
         y = rows_to_train_on.sales
         rows_to_train_on.drop(columns=['sales'], inplace=True)
         rows_to_train_on.insert(loc=9, column='sales', value=y)
 
-        scaler = MinMaxScaler()
+        scaler = MinMaxScaler(feature_range=(0, 100))
         rows_to_train_on = scaler.fit_transform(rows_to_train_on)
+        rows_to_train_on = rows_to_train_on[:750]
 
         x, y = split_sequences(rows_to_train_on, 30)
         return x, y
