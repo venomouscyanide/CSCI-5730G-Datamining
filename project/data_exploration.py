@@ -19,10 +19,13 @@ class TrainIndividual:
     def train(self, train_data, labels):
         batch_size = 8
 
-        n_features = 9
+        inp_dim = 9
         n_timesteps = 30
+        hidden_size = 128
+        n_layers = 3
+        output_size = 1
 
-        rnn_model = MV_LSTM(n_features, n_timesteps)
+        rnn_model = RNNPred(inp_dim, n_timesteps, hidden_size, n_layers, output_size)
         optimizer = torch.optim.Adam(rnn_model.parameters(), lr=0.001, weight_decay=1e-6)
         loss_fn = MSELoss()
 
