@@ -15,22 +15,23 @@ class RNNPred(nn.Module):
         batch_size = input.size(0)
         # hidden_state = self.init_hidden(16)
         # reshaped_input = input.view(1, 1, 10)
-        output, _ = self.rnn(input, self.hidden_state)
+        output, self.hidden = self.rnn(input, self.hidden)
         output = output.contiguous().view(batch_size, -1)
         output = self.linear(output)
         return output
 
     def init_hidden(self, batch_size=16):
-        self.hidden_state = torch.zeros(self.no_of_hidden_layers, batch_size, self.hidden_size).requires_grad_()
-
-
-
+        hidden_state = torch.zeros(self.no_of_hidden_layers, batch_size, self.hidden_size).requires_grad_()
+        # cell_state = torch.zeros(self.no_of_hidden_layers, batch_size, self.hidden_size).requires_grad_()
+        # self.hidden = (hidden_state, cell_state)
+        self.hidden = hidden_state
 
 
 class MV_LSTM(torch.nn.Module):
     """
     ONLY FOR REFERENCE
     """
+
     # https://stackoverflow.com/questions/56858924/multivariate-input-lstm-in-pytorch
 
     def __init__(self, n_features, seq_length):
