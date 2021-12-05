@@ -12,9 +12,17 @@ from project.prep_and_train import CleaningAndTrain, DataFiles
 
 
 def earth_quake(enhanced_train_data):
+    min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 10))
+    copy_of_df = enhanced_train_data.copy()
+    copy_of_df.drop(columns=['date', 'family'], inplace=True)
+
+    scaled = min_max_scaler.fit_transform(copy_of_df)
+    df = pd.DataFrame(scaled)
+    enhanced_train_data['sales'] = df[2]
+
     # https://www.kaggle.com/luisblanche/pytorch-forecasting-temporalfusiontransformer
-    fig = px.line(enhanced_train_data, x='date',
-                  y=['earthquake_effect', 'sales'])
+    fig = px.line(enhanced_train_data[(enhanced_train_data['date'] > pd.to_datetime("2016-03-16"))&(enhanced_train_data['date'] < pd.to_datetime("2016-06-16"))], x='date',
+                                       y=['earthquake_effect', 'sales'])
 
     fig.update_layout(title_text="Analyzing the effect of earthquake on sales")
     fig.update_xaxes(title_text="Date")
