@@ -3,12 +3,13 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+from scipy.stats import skewnorm
 
 from sklearn.preprocessing import OrdinalEncoder, MinMaxScaler
 from torch.nn import CrossEntropyLoss, MSELoss, NLLLoss
 from torch.utils.data import TensorDataset, DataLoader
 
-from project.models import RNNPred, MV_LSTM
+from project.models import RNNPred
 
 import warnings
 
@@ -113,7 +114,7 @@ def split_sequences(sequences, n_steps, if_y=True):
 
 
 class CleaningAndTrain:
-    def base_cleaning(self, base_path, data, oe_locale, oe_city, oe_state, oe_type_y):
+    def base_cleaning(self, base_path, data, oe_locale, oe_city, oe_state, oe_type_y, index_date=False):
         store_metadata = pd.read_csv(
             os.path.join(base_path, DataFiles.STORE_METADATA))  # not used in this implementation
         transactions = pd.read_csv(os.path.join(base_path, DataFiles.TRANSACTIONS))
@@ -154,12 +155,33 @@ class CleaningAndTrain:
         enhanced_train_data["city"] = oe_city.fit_transform(enhanced_train_data[["city"]])
         enhanced_train_data["state"] = oe_state.fit_transform(enhanced_train_data[["state"]])
         enhanced_train_data["type_y"] = oe_type_y.fit_transform(enhanced_train_data[["type_y"]])
-        enhanced_train_data.set_index('date', inplace=True)
+
+        # Add misc data
+        # ideas from https://www.kaggle.com/luisblanche/pytorch-forecasting-temporalfusiontransformer
+        # 1) add earthquake effect using skewnorm
+        earthquake = pd.DataFrame()
+        earthquake["date"] = pd.date_range("2016-04-17", "2016-05-16")
+        earthquake['earthquake_effect'] = [2 * skewnorm.pdf(i / 20, 0.5) for i in range(len(earthquake))]
+        earthquake['date'] = pd.to_datetime(earthquake['date']).dt.date
+        enhanced_train_data['date'] = pd.to_datetime(enhanced_train_data['date']).dt.date
+
+        enhanced_train_data = pd.merge(enhanced_train_data, earthquake, on='date', how='left')
+        enhanced_train_data['earthquake_effect'].fillna(0, inplace=True)
+
+        # 2) payday is on the 15 and last day of the month. Count the time to payday as a variable
+        def get_distance_from_paydays(date):
+            end_of_month = date.daysinmonth
+            distance_to_1st = 0 if date.day >= 15 else 15 - date.day
+            distance_to15th = 0 if date.day < 15 else end_of_month - date.day
+            return distance_to_1st + distance_to15th
+
+        enhanced_train_data['date'] = pd.to_datetime(enhanced_train_data['date'], infer_datetime_format=True)
+        enhanced_train_data['days_from_payday'] = enhanced_train_data['date'].apply(get_distance_from_paydays)
+
+        if index_date:
+            enhanced_train_data.set_index('date', inplace=True)
 
         return enhanced_train_data
-
-    def data_prep(self):
-        pass
 
     def execute(self, base_path):
         oe_locale = OrdinalEncoder(dtype=np.int64)
