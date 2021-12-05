@@ -131,8 +131,9 @@ def holidays(enhanced_train_data):
 
 def heat_map(enhanced_train_data):
     plt.figure(figsize=(10, 10))
+    plt.subplots_adjust(bottom=0.15, left=0.15)
     sns.heatmap(enhanced_train_data.corr())
-    # plt.show()
+    plt.show()
     plt.savefig(fname='heatmap.png')
 
 
