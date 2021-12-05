@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 
 import seaborn as sns
 
+
 def earth_quake(enhanced_train_data):
     min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 10))
     copy_of_df = enhanced_train_data.copy()
@@ -138,6 +139,13 @@ def heat_map(enhanced_train_data):
     plt.savefig(fname='heatmap.png')
 
 
+def write_pd_frame():
+    table = CleaningAndTrain().base_cleaning(base_path, train_data, oe_locale, oe_city, oe_state,
+                                             oe_type_y, index_date=False, misc=True, oil=True, oe=False,
+                                             drop_holidays=False).head(5)
+    table.to_csv('train_dataset.csv', sep='\t', encoding='utf-8')
+
+
 if __name__ == '__main__':
     oe_locale = OrdinalEncoder(dtype=np.int64)
     oe_city = OrdinalEncoder(dtype=np.int64)
@@ -149,10 +157,11 @@ if __name__ == '__main__':
     test_data = pd.read_csv(os.path.join(base_path, DataFiles.TEST))
 
     enhanced_train_data = CleaningAndTrain().base_cleaning(base_path, train_data, oe_locale, oe_city, oe_state,
-                                                           oe_type_y, False)
+                                                           oe_type_y, index_date=False)
     # earth_quake(enhanced_train_data)
     # oil_price_vs_sales(enhanced_train_data)
     # payday_analysis(enhanced_train_data)
     # transactions(enhanced_train_data)
     # holidays(enhanced_train_data)
-    heat_map(enhanced_train_data)
+    # heat_map(enhanced_train_data)
+    write_pd_frame()

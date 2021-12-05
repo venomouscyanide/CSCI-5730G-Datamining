@@ -114,7 +114,8 @@ def split_sequences(sequences, n_steps, if_y=True):
 
 
 class CleaningAndTrain:
-    def base_cleaning(self, base_path, data, oe_locale, oe_city, oe_state, oe_type_y, index_date=False):
+    def base_cleaning(self, base_path, data, oe_locale, oe_city, oe_state, oe_type_y, index_date=True, misc=True,
+                      oil=True, oe=True, drop_holidays=True):
         store_metadata = pd.read_csv(
             os.path.join(base_path, DataFiles.STORE_METADATA))  # not used in this implementation
         transactions = pd.read_csv(os.path.join(base_path, DataFiles.TRANSACTIONS))
@@ -141,49 +142,56 @@ class CleaningAndTrain:
 
         holiday_types = ['Holiday', 'Additional', 'Bridge', 'Event', 'Transfer']
         holidays = holidays.query("(type in @holiday_types) and (transferred == 0)")
-        holidays.drop(columns=['locale_name', 'description', 'transferred'], inplace=True)
+        if drop_holidays:
+            holidays.drop(columns=['locale_name', 'description', 'transferred'], inplace=True)
         holidays.drop_duplicates(inplace=True, keep="first", subset=['date'])
         enhanced_train_data = enhanced_train_data.merge(holidays, left_on=['date'], right_on=['date'], how='left')
 
         enhanced_train_data['locale'].fillna(value='WorkDay', inplace=True)
         enhanced_train_data['type'].fillna(value=0, inplace=True)
         enhanced_train_data['type'] = enhanced_train_data['type'].astype(bool).astype(int)
-        enhanced_train_data["locale"] = oe_locale.fit_transform(enhanced_train_data[["locale"]])
+        if oe:
+            enhanced_train_data["locale"] = oe_locale.fit_transform(enhanced_train_data[["locale"]])
 
         enhanced_train_data = enhanced_train_data.merge(store_metadata, left_on='store_nbr', right_on='store_nbr',
                                                         how='left')
-        enhanced_train_data["city"] = oe_city.fit_transform(enhanced_train_data[["city"]])
-        enhanced_train_data["state"] = oe_state.fit_transform(enhanced_train_data[["state"]])
-        enhanced_train_data["type_y"] = oe_type_y.fit_transform(enhanced_train_data[["type_y"]])
+        if oe:
+            enhanced_train_data["city"] = oe_city.fit_transform(enhanced_train_data[["city"]])
+            enhanced_train_data["state"] = oe_state.fit_transform(enhanced_train_data[["state"]])
+            enhanced_train_data["type_y"] = oe_type_y.fit_transform(enhanced_train_data[["type_y"]])
 
-        # Add misc data
-        # ideas from https://www.kaggle.com/luisblanche/pytorch-forecasting-temporalfusiontransformer
-        # 1) add earthquake effect using skewnorm
-        earthquake = pd.DataFrame()
-        earthquake["date"] = pd.date_range("2016-04-17", "2016-05-16")
-        earthquake['earthquake_effect'] = [2 * skewnorm.pdf(i / 20, 0.5) for i in range(len(earthquake))]
-        earthquake['date'] = pd.to_datetime(earthquake['date']).dt.date
-        enhanced_train_data['date'] = pd.to_datetime(enhanced_train_data['date']).dt.date
+        if misc:
+            # Add misc data
+            # ideas from https://www.kaggle.com/luisblanche/pytorch-forecasting-temporalfusiontransformer
+            # 1) add earthquake effect using skewnorm
+            earthquake = pd.DataFrame()
+            earthquake["date"] = pd.date_range("2016-04-17", "2016-05-16")
+            earthquake['earthquake_effect'] = [2 * skewnorm.pdf(i / 20, 0.5) for i in range(len(earthquake))]
+            earthquake['date'] = pd.to_datetime(earthquake['date']).dt.date
+            enhanced_train_data['date'] = pd.to_datetime(enhanced_train_data['date']).dt.date
 
-        enhanced_train_data = pd.merge(enhanced_train_data, earthquake, on='date', how='left')
-        enhanced_train_data['earthquake_effect'].fillna(0, inplace=True)
+            enhanced_train_data = pd.merge(enhanced_train_data, earthquake, on='date', how='left')
+            enhanced_train_data['earthquake_effect'].fillna(0, inplace=True)
 
-        # 2) payday is on the 15 and last day of the month. Count the time to payday as a variable
-        def get_distance_from_paydays(date):
-            end_of_month = date.daysinmonth
-            distance_to_1st = 0 if date.day >= 15 else 15 - date.day
-            distance_to15th = 0 if date.day < 15 else end_of_month - date.day
-            return distance_to_1st + distance_to15th
+            # 2) payday is on the 15 and last day of the month. Count the time to payday as a variable
+            def get_distance_from_paydays(date):
+                end_of_month = date.daysinmonth
+                distance_to_1st = 0 if date.day >= 15 else 15 - date.day
+                distance_to15th = 0 if date.day < 15 else end_of_month - date.day
+                return distance_to_1st + distance_to15th
 
-        enhanced_train_data['date'] = pd.to_datetime(enhanced_train_data['date'], infer_datetime_format=True)
-        enhanced_train_data['days_from_payday'] = enhanced_train_data['date'].apply(get_distance_from_paydays)
+            enhanced_train_data['date'] = pd.to_datetime(enhanced_train_data['date'], infer_datetime_format=True)
+            enhanced_train_data['days_from_payday'] = enhanced_train_data['date'].apply(get_distance_from_paydays)
+
+        if not oil:
+            enhanced_train_data.drop(columns=['dcoilwtico'], inplace=True)
 
         if index_date:
             enhanced_train_data.set_index('date', inplace=True)
 
         return enhanced_train_data
 
-    def execute(self, base_path):
+    def execute(self, base_path, misc=True, oil=True):
         oe_locale = OrdinalEncoder(dtype=np.int64)
         oe_city = OrdinalEncoder(dtype=np.int64)
         oe_state = OrdinalEncoder(dtype=np.int64)
@@ -192,8 +200,10 @@ class CleaningAndTrain:
         train_data = pd.read_csv(os.path.join(base_path, DataFiles.TRAIN))
         test_data = pd.read_csv(os.path.join(base_path, DataFiles.TEST))
 
-        enhanced_train_data = self.base_cleaning(base_path, train_data, oe_locale, oe_city, oe_state, oe_type_y)
-        enhanced_test_data = self.base_cleaning(base_path, test_data, oe_locale, oe_city, oe_state, oe_type_y)
+        enhanced_train_data = self.base_cleaning(base_path, train_data, oe_locale, oe_city, oe_state, oe_type_y,
+                                                 misc=misc, oil=oil)
+        enhanced_test_data = self.base_cleaning(base_path, test_data, oe_locale, oe_city, oe_state, oe_type_y,
+                                                misc=misc, oil=oil)
         enhanced_test_data['transactions'].fillna(value=enhanced_train_data['transactions'].mean(),
                                                   inplace=True)  # TODO: be the mean of the respective groups
 
