@@ -7,6 +7,7 @@ from numpy import array
 from numpy import hstack
 
 
+# https://stackoverflow.com/questions/56858924/multivariate-input-lstm-in-pytorch
 # split a multivariate sequence into samples
 def split_sequences(sequences, n_steps):
     X, y = list(), list()
@@ -69,17 +70,16 @@ out_seq = out_seq.reshape((len(out_seq), 1))
 # horizontally stack columns
 dataset = hstack((in_seq1, in_seq2, out_seq))
 
-
-n_features = 2 # this is number of parallel inputs
-n_timesteps = 3 # this is number of timesteps
+n_features = 2  # this is number of parallel inputs
+n_timesteps = 3  # this is number of timesteps
 
 # convert dataset into input/output
 X, y = split_sequences(dataset, n_timesteps)
 print(X.shape, y.shape)
 
 # create NN
-mv_net = MV_LSTM(n_features,n_timesteps)
-criterion = torch.nn.MSELoss() # reduction='sum' created huge loss value
+mv_net = MV_LSTM(n_features, n_timesteps)
+criterion = torch.nn.MSELoss()  # reduction='sum' created huge loss value
 optimizer = torch.optim.Adam(mv_net.parameters(), lr=1e-1)
 
 train_episodes = 500
