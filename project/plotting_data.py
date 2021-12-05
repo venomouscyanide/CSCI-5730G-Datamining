@@ -9,7 +9,9 @@ from sklearn import preprocessing
 from sklearn.preprocessing import OrdinalEncoder
 
 from project.prep_and_train import CleaningAndTrain, DataFiles
+import matplotlib.pyplot as plt
 
+import seaborn as sns
 
 def earth_quake(enhanced_train_data):
     min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 10))
@@ -127,6 +129,13 @@ def holidays(enhanced_train_data):
     fig.write_image("holidays.png")
 
 
+def heat_map(enhanced_train_data):
+    plt.figure(figsize=(10, 10))
+    sns.heatmap(enhanced_train_data.corr())
+    # plt.show()
+    plt.savefig(fname='heatmap.png')
+
+
 if __name__ == '__main__':
     oe_locale = OrdinalEncoder(dtype=np.int64)
     oe_city = OrdinalEncoder(dtype=np.int64)
@@ -143,4 +152,5 @@ if __name__ == '__main__':
     # oil_price_vs_sales(enhanced_train_data)
     # payday_analysis(enhanced_train_data)
     # transactions(enhanced_train_data)
-    holidays(enhanced_train_data)
+    # holidays(enhanced_train_data)
+    heat_map(enhanced_train_data)
