@@ -23,7 +23,7 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
     max_encoder_length = 60  # Go back  60 Days
     training_cutoff = enhanced_dataset["time_idx"].max() - max_prediction_length
 
-    for cols_to_convert in ['family', 'locale', 'locale_name', 'description', 'state', 'city', 'type_y', 'store_nbr',
+    for cols_to_convert in ['family', 'locale', 'state', 'city', 'type_y', 'store_nbr',
                             'cluster', 'type_x']:
         enhanced_dataset[cols_to_convert] = enhanced_dataset[cols_to_convert].astype(str).astype('category')
 
@@ -41,9 +41,6 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
         max_prediction_length=max_prediction_length,
         static_categoricals=["store_nbr",
                              'locale',
-                             'locale_name',
-                             'transferred',
-                             'description',
                              "family",
                              "city",
                              "state",
@@ -123,7 +120,7 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
     predictions = best_tft.predict(val_dataloader)
     print("After training", (actuals - predictions).abs().mean())
 
-    for cols_to_convert in ['family', 'locale', 'locale_name', 'description', 'state', 'city', 'type_y', 'store_nbr',
+    for cols_to_convert in ['family', 'locale', 'state', 'city', 'type_y', 'store_nbr',
                             'cluster', 'type_x']:
         enhanced_test_dataset[cols_to_convert] = enhanced_test_dataset[cols_to_convert].astype(str).astype('category')
 
@@ -140,12 +137,24 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
     merge_b = last_data[['time_idx', 'store_nbr', 'family', 'sales', 'transactions']]
 
     decoder_data = pd.merge(merge_a, merge_b, on=['time_idx', 'store_nbr', 'family', ], how="left")
-
+    decoder_data.drop(columns=['transactions_x'], inplace=True)
+    decoder_data.rename(columns={"transactions_y": "transactions"}, inplace=True)
     # combine encoder and decoder data
     new_prediction_data = pd.concat([encoder_data, decoder_data], ignore_index=True)
 
-    predictions, x = best_tft.predict(new_prediction_data, mode="raw", return_x=True)
-    interpolated_data = best_tft.interpret_output(predictions, reduction="sum")
+    predictions = best_tft.predict(new_prediction_data, mode="prediction", return_x=False)
+
+    predictions = pd.DataFrame(predictions.numpy()).T  # output becomes 1782 * 16
+    # 1782 is 54 * 33; 16 is the number of steps to predict
+    predictions['date'] = sorted(enhanced_test_dataset['date'].unique())
+    predictions = pd.melt(predictions, id_vars=['date'])
+    predictions = predictions.sort_values(['date', 'variable']).reset_index(drop=True)
+    enhanced_test_dataset[['date', 'id', 'store_nbr', 'family']].sort_values(
+        ['date', 'store_nbr', 'family']).reset_index(drop=True)
+    enhanced_test_dataset = enhanced_test_dataset.join(predictions['value'])
+    enhanced_test_dataset.rename(columns={'value': 'sales'}, inplace=True)
+    new_df = enhanced_test_dataset[['id', 'sales', ]]
+    new_df.to_csv('submission_tft.csv', sep='\t', encoding='utf-8', index=False)
 
     return best_tft
 
@@ -165,9 +174,9 @@ if __name__ == '__main__':
     enhanced_train_dataset = CleaningAndTrain().base_cleaning(base_path, train_data, oe_locale, oe_city, oe_state,
                                                               oe_type_y, index_date=False, misc=True, oil=True,
                                                               oe=False,
-                                                              drop_holidays=False)
+                                                              drop_holidays=True)
     enhanced_test_dataset = CleaningAndTrain().base_cleaning(base_path, test_data, oe_locale, oe_city, oe_state,
                                                              oe_type_y, index_date=False, misc=True, oil=True,
-                                                             oe=False, drop_holidays=False)
+                                                             oe=False, drop_holidays=True)
 
     best_ft = temporal_ft(enhanced_train_dataset, enhanced_test_dataset)
