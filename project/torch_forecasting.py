@@ -47,7 +47,7 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
                              "cluster",
                              "type_y"],
         time_varying_known_categoricals=["type_x", ],
-        time_varying_known_reals=["time_idx", "onpromotion", 'days_from_payday', 'dcoilwtico', "earthquake_effect"
+        time_varying_known_reals=["time_idx", "onpromotion", 'days_from_payday', "earthquake_effect"
                                   ],
         time_varying_unknown_categoricals=[],
         time_varying_unknown_reals=[
@@ -83,7 +83,7 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
     logger = TensorBoardLogger("lightning_logs")  # logging results to a tensorboard
 
     trainer = pl.Trainer(
-        max_epochs=1,  # TODO: CHANGEEE!
+        max_epochs=50,  # TODO: CHANGEEE!
         gpus=0,
         weights_summary="top",
         gradient_clip_val=0.1,
@@ -154,7 +154,7 @@ def temporal_ft(enhanced_dataset, enhanced_test_dataset):
     enhanced_test_dataset = enhanced_test_dataset.join(predictions['value'])
     enhanced_test_dataset.rename(columns={'value': 'sales'}, inplace=True)
     new_df = enhanced_test_dataset[['id', 'sales', ]]
-    new_df.to_csv('submission_tft.csv', sep='\t', encoding='utf-8', index=False)
+    new_df.to_csv('submission_tft_50_epochs_no_oil.csv', sep='\t', encoding='utf-8', index=False)
 
     return best_tft
 
@@ -170,13 +170,14 @@ if __name__ == '__main__':
     train_data = pd.read_csv(os.path.join(base_path, DataFiles.TRAIN))
     test_data = pd.read_csv(os.path.join(base_path, DataFiles.TEST))
 
-    # with oil data + misc data
+    # without oil data + misc data
     enhanced_train_dataset = CleaningAndTrain().base_cleaning(base_path, train_data, oe_locale, oe_city, oe_state,
                                                               oe_type_y, index_date=False, misc=True, oil=True,
                                                               oe=False,
                                                               drop_holidays=True)
+    enhanced_train_dataset.drop(columns=['dcoilwtico'], inplace=True)
     enhanced_test_dataset = CleaningAndTrain().base_cleaning(base_path, test_data, oe_locale, oe_city, oe_state,
                                                              oe_type_y, index_date=False, misc=True, oil=True,
                                                              oe=False, drop_holidays=True)
-
+    enhanced_test_dataset.drop(columns=['dcoilwtico'], inplace=True)
     best_ft = temporal_ft(enhanced_train_dataset, enhanced_test_dataset)
